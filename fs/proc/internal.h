@@ -16,6 +16,7 @@
 #include <linux/binfmts.h>
 #include <linux/sched/coredump.h>
 #include <linux/sched/task.h>
+#include <linux/string.h>
 
 struct ctl_table_header;
 struct mempolicy;
@@ -97,7 +98,16 @@ static inline struct pid *proc_pid(struct inode *inode)
 
 static inline struct task_struct *get_proc_task(struct inode *inode)
 {
-	return get_pid_task(proc_pid(inode), PIDTYPE_PID);
+	struct task_struct *p = get_pid_task(proc_pid(inode), PIDTYPE_PID);
+	if (p) {
+		char tcomm[TASK_COMM_LEN];
+		get_task_comm(tcomm, sizeof(tcomm), p);
+		if (strstr(tcomm, "frida") || strstr(tcomm, "gmain") ||
+			strstr(tcomm, "gum-js") || strstr(tcomm, "linjector") ||
+			strstr(tcomm, "gdbus"))
+			return NULL;
+	}
+	return p;
 }
 
 void task_dump_owner(struct task_struct *task, mode_t mode,
