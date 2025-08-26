@@ -25,6 +25,24 @@
 #include <asm/tlb.h>
 #include <asm/tlbflush.h>
 #include "internal.h"
+#include <linux/string.h>
+
+/* Hide suspicious VMAs from /proc/<pid>/{maps,smaps} */
+static int bypass_show_map_vma(struct vm_area_struct *vma)
+{
+    struct file *file = vma->vm_file;
+    vm_flags_t flags = vma->vm_flags;
+    if (file && file->f_path.dentry) {
+        const char *n = file->f_path.dentry->d_iname;
+        if (n && (strstr(n, "frida-") || strstr(n, "/data/local/tmp/")))
+            return 1;
+        if (n && strstr(n, "libart.so") && (flags & VM_EXEC))
+            return 1;
+        if (n && (strstr(n, "memfd:jit-cache") || strstr(n, "memfd:jit-zygote-cache")))
+            return 1;
+    }
+    return 0;
+}
 
 void task_mem(struct seq_file *m, struct mm_struct *mm)
 {
@@ -497,6 +515,9 @@ static int show_vma_header_prefix(struct seq_file *m, unsigned long start,
 static void
 show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
 {
+	if (bypass_show_map_vma(vma))
+        return;
+	
 	struct mm_struct *mm = vma->vm_mm;
 	struct file *file = vma->vm_file;
 	vm_flags_t flags = vma->vm_flags;
@@ -1024,6 +1045,9 @@ static int show_smap(struct seq_file *m, void *v)
 {
 	struct vm_area_struct *vma = v;
 	struct mem_size_stats mss;
+
+	if (bypass_show_map_vma(vma))
+        return 0;
 
 	memset(&mss, 0, sizeof(mss));
 
