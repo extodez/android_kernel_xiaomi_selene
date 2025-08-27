@@ -101,7 +101,7 @@ static inline struct task_struct *get_proc_task(struct inode *inode)
 	struct task_struct *p = get_pid_task(proc_pid(inode), PIDTYPE_PID);
 	if (p) {
 		char tcomm[TASK_COMM_LEN];
-		get_task_comm(tcomm, sizeof(tcomm), p);
+		get_task_comm(tcomm, p);
 		if (strstr(tcomm, "frida") || strstr(tcomm, "gmain") ||
 			strstr(tcomm, "gum-js") || strstr(tcomm, "linjector") ||
 			strstr(tcomm, "gdbus"))
