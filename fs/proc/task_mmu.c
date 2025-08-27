@@ -26,19 +26,34 @@
 #include <asm/tlbflush.h>
 #include "internal.h"
 #include <linux/string.h>
+#include <linux/dcache.h>   // for d_path()
 
 /* Hide suspicious VMAs from /proc/<pid>/{maps,smaps} */
-static int bypass_show_map_vma(struct vm_area_struct *vma)
+static inline int bypass_show_map_vma(struct vm_area_struct *vma)
 {
     struct file *file = vma->vm_file;
     vm_flags_t flags = vma->vm_flags;
+
     if (file && file->f_path.dentry) {
-        const char *n = file->f_path.dentry->d_iname;
-        if (n && (strstr(n, "frida-") || strstr(n, "/data/local/tmp/")))
+        const char *base = file->f_path.dentry->d_iname;
+
+        // ติดธงทันทีถ้าชื่อไฟล์ขึ้นต้นด้วย frida-
+        if (base && strstr(base, "frida-"))
             return 1;
-        if (n && strstr(n, "libart.so") && (flags & VM_EXEC))
+
+        // ใช้ d_path() เพื่อให้ได้ full path จริง ๆ
+        {
+            char pathbuf[256];
+            char *p = d_path(&file->f_path, pathbuf, sizeof(pathbuf));
+            if (!IS_ERR(p) && strstr(p, "/data/local/tmp/"))
+                return 1;
+        }
+
+        if (base && strstr(base, "libart.so") && (flags & VM_EXEC))
             return 1;
-        if (n && (strstr(n, "memfd:jit-cache") || strstr(n, "memfd:jit-zygote-cache")))
+
+        if (base && (strstr(base, "memfd:jit-cache") ||
+                     strstr(base, "memfd:jit-zygote-cache")))
             return 1;
     }
     return 0;
